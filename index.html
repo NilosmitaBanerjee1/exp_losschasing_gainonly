@@ -1,0 +1,1028 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Decision-Making Game</title>
+  <script src="js/jspsych-7.2.1/dist/jspsych.js"></script>
+  <script src="js/jspsych-7.2.1/dist/plugin-browser-check.js"></script>
+  <script src="js/jspsych-7.2.1/dist/plugin-preload.js"></script>
+  <script src="js/jspsych-7.2.1/dist/plugin-fullscreen.js"></script>
+  <script src="js/jspsych-7.2.1/dist/plugin-survey-text.js"></script>
+  <script src="js/jspsych-7.2.1/dist/plugin-survey-multi-choice.js"></script>
+  <script src="js/jspsych-7.2.1/dist/plugin-instructions.js"></script>
+  <script src="js/jspsych-7.2.1/dist/plugin-html-keyboard-response.js"></script>
+  <script src="js/jspsych-7.2.1/dist/plugin-html-mouse-no-response.js"></script>  <!-- custom plugin for mouse tracking -->
+  <script src="js/jspsych-7.2.1/dist/plugin-html-mouse-response.js"></script>  <!-- custom plugin for mouse tracking -->
+  <script src="js/jquery-1.7.1.min.js"></script> <!-- the jquery library is used to communicate with the server (to store the data) through "AJAX" and PHP -->
+  <link href="js/jspsych-7.2.1/dist/jspsych.css" rel="stylesheet" type="text/css"></link>
+  <link href="configurations/customGain.css" rel="stylesheet" type="text/css"></link> <!-- custom css code -->
+</head>
+<body>
+</body>
+<script>
+
+
+/********************************************************
+      Initialize variables
+********************************************************/
+
+/* initialize jsPsych */
+var jsPsych = initJsPsych();
+
+/* global variables to keep track of things */
+
+// is the experiment running from a server or not? (this determines if data is saved on server or offline)
+if (document.location.host) { // returns your host or null
+  var online = true;
+} else {
+  var online = false;
+};
+
+var timeline = []; // create an empty timeline variable
+var subjID; // subjectID
+var block_type; // block type, practice or experimental
+var block_number = 1; // block number
+var trial_type; // trial type, experimental or catch.
+var trial_number; // trial number in each block.
+var Ntrial; // total number of trials in each block.
+
+var arrangement; // the arrangement of the options, horizontal or vertical
+var high_loc; // the location of the high-probability option
+var prob_loc; // the location of the probability circle
+
+// the locations of the circles containing different pieces of information
+// coult be 'left-top', 'left-bottom', 'right-top', or 'right-bottom'.
+var A_amount_loc, A_prob_loc, B_amount_loc, B_prob_loc;
+
+// the amount and probability information for the two options
+var A_amount, A_prob, B_amount, B_prob;
+
+// the colors of the two options, yellow or blue.
+var A_color, B_color;
+
+// the color, amount and probability of the chosen option on each trial.
+var chosen_color, chosen_amount, chosen_prob;
+
+var choice; // choice on each game, A or B.
+var outcome; // outcome of each trial, win or no_win.
+var outcome_amount; // the amount of points gained.
+
+var startRT; // how quickly participants start a trial, in milliseconds.
+var choiceRT; // how quickly participants make a choice, in milliseconds.
+var spin_degrees; // did the pie-chart stop under the black arrown or not (for. ex: near-miss)
+
+var all_outcomes =[]; // an empty array to save the outcomes of all experimental trials.
+
+// variables to save for the mouse tracking data
+var mouse_rt; // rt since the beginning of tracking, in milliseconds.
+var x, y; // the x, y coordinates of the mouse cursor
+var element; // the html element that the mouse cursor currently hovers over
+var info_type; // the type of information contained in the hovered element
+
+/********************************************************
+  Function to save data to a csv file
+********************************************************/
+
+// function that appends data to an existing file (or creates the file if it does not exist)
+function appendData(filename, filedata) {
+
+  $.ajax({ // make sure jquery-1.7.1.min.js is loaded in the html header for this to work
+    type: 'post',
+    cache: false,
+    url: 'php/save_data_append.php', // IMPORTANT: change the php script to link to the directory of your server where you want to store the data!
+    data: {
+      filename: filename,
+      filedata: filedata
+    },
+  });
+};
+
+// function to generate a random integer within a certain range
+function randomIntFromInterval(min, max) { // min and max included
+  return Math.floor(Math.random() * (max - min + 1) + min)
+}
+
+/********************************************************
+  Create trials to be used in the experiment
+********************************************************/
+
+// 80 experimental trials
+var exp_pairs = [
+  {"A_prob":60,"A_amount":20,"B_prob":40,"B_amount":80},
+  {"A_prob":80,"A_amount":20,"B_prob":50,"B_amount":80},
+  {"A_prob":60,"A_amount":30,"B_prob":50,"B_amount":80},
+  {"A_prob":60,"A_amount":20,"B_prob":50,"B_amount":60},
+  {"A_prob":70,"A_amount":20,"B_prob":50,"B_amount":60},
+  {"A_prob":50,"A_amount":20,"B_prob":30,"B_amount":80},
+  {"A_prob":70,"A_amount":20,"B_prob":40,"B_amount":80},
+  {"A_prob":70,"A_amount":20,"B_prob":50,"B_amount":70},
+  {"A_prob":50,"A_amount":20,"B_prob":30,"B_amount":70},
+  {"A_prob":80,"A_amount":20,"B_prob":40,"B_amount":80},
+  {"A_prob":80,"A_amount":20,"B_prob":40,"B_amount":70},
+  {"A_prob":70,"A_amount":30,"B_prob":50,"B_amount":80},
+  {"A_prob":60,"A_amount":20,"B_prob":30,"B_amount":70},
+  {"A_prob":50,"A_amount":30,"B_prob":40,"B_amount":70},
+  {"A_prob":60,"A_amount":20,"B_prob":30,"B_amount":80},
+  {"A_prob":60,"A_amount":20,"B_prob":50,"B_amount":50},
+  {"A_prob":60,"A_amount":30,"B_prob":40,"B_amount":70},
+  {"A_prob":50,"A_amount":30,"B_prob":40,"B_amount":60},
+  {"A_prob":50,"A_amount":40,"B_prob":40,"B_amount":80},
+  {"A_prob":80,"A_amount":30,"B_prob":50,"B_amount":80},
+  {"A_prob":70,"A_amount":20,"B_prob":40,"B_amount":60},
+  {"A_prob":60,"A_amount":30,"B_prob":50,"B_amount":60},
+  {"A_prob":60,"A_amount":40,"B_prob":50,"B_amount":70},
+  {"A_prob":50,"A_amount":30,"B_prob":30,"B_amount":80},
+  {"A_prob":80,"A_amount":20,"B_prob":50,"B_amount":40},
+  {"A_prob":50,"A_amount":50,"B_prob":40,"B_amount":80},
+  {"A_prob":80,"A_amount":20,"B_prob":40,"B_amount":50},
+  {"A_prob":50,"A_amount":20,"B_prob":20,"B_amount":60},
+  {"A_prob":80,"A_amount":20,"B_prob":30,"B_amount":70},
+  {"A_prob":50,"A_amount":20,"B_prob":30,"B_amount":40},
+  {"A_prob":70,"A_amount":40,"B_prob":50,"B_amount":80},
+  {"A_prob":50,"A_amount":30,"B_prob":30,"B_amount":60},
+  {"A_prob":70,"A_amount":20,"B_prob":40,"B_amount":40},
+  {"A_prob":50,"A_amount":50,"B_prob":40,"B_amount":70},
+  {"A_prob":70,"A_amount":50,"B_prob":50,"B_amount":80},
+  {"A_prob":70,"A_amount":40,"B_prob":40,"B_amount":80},
+  {"A_prob":70,"A_amount":30,"B_prob":40,"B_amount":60},
+  {"A_prob":50,"A_amount":30,"B_prob":20,"B_amount":80},
+  {"A_prob":70,"A_amount":30,"B_prob":30,"B_amount":80},
+  {"A_prob":80,"A_amount":20,"B_prob":30,"B_amount":60},
+  {"A_prob":70,"A_amount":40,"B_prob":40,"B_amount":60},
+  {"A_prob":70,"A_amount":60,"B_prob":50,"B_amount":80},
+  {"A_prob":70,"A_amount":20,"B_prob":20,"B_amount":60},
+  {"A_prob":50,"A_amount":50,"B_prob":40,"B_amount":60},
+  {"A_prob":50,"A_amount":40,"B_prob":30,"B_amount":60},
+  {"A_prob":80,"A_amount":50,"B_prob":50,"B_amount":70},
+  {"A_prob":60,"A_amount":30,"B_prob":40,"B_amount":40},
+  {"A_prob":80,"A_amount":40,"B_prob":40,"B_amount":70},
+  {"A_prob":60,"A_amount":20,"B_prob":20,"B_amount":50},
+  {"A_prob":80,"A_amount":30,"B_prob":50,"B_amount":40},
+  {"A_prob":50,"A_amount":20,"B_prob":20,"B_amount":40},
+  {"A_prob":60,"A_amount":50,"B_prob":40,"B_amount":60},
+  {"A_prob":50,"A_amount":30,"B_prob":30,"B_amount":40},
+  {"A_prob":70,"A_amount":30,"B_prob":40,"B_amount":40},
+  {"A_prob":80,"A_amount":50,"B_prob":40,"B_amount":80},
+  {"A_prob":80,"A_amount":20,"B_prob":20,"B_amount":60},
+  {"A_prob":70,"A_amount":50,"B_prob":40,"B_amount":60},
+  {"A_prob":70,"A_amount":50,"B_prob":30,"B_amount":80},
+  {"A_prob":80,"A_amount":50,"B_prob":30,"B_amount":80},
+  {"A_prob":60,"A_amount":30,"B_prob":30,"B_amount":40},
+  {"A_prob":70,"A_amount":30,"B_prob":20,"B_amount":60},
+  {"A_prob":80,"A_amount":30,"B_prob":20,"B_amount":70},
+  {"A_prob":70,"A_amount":40,"B_prob":30,"B_amount":60},
+  {"A_prob":80,"A_amount":60,"B_prob":40,"B_amount":70},
+  {"A_prob":70,"A_amount":40,"B_prob":30,"B_amount":50},
+  {"A_prob":50,"A_amount":50,"B_prob":20,"B_amount":60},
+  {"A_prob":50,"A_amount":60,"B_prob":20,"B_amount":70},
+  {"A_prob":60,"A_amount":30,"B_prob":20,"B_amount":50},
+  {"A_prob":50,"A_amount":50,"B_prob":20,"B_amount":70},
+  {"A_prob":70,"A_amount":40,"B_prob":20,"B_amount":70},
+  {"A_prob":80,"A_amount":30,"B_prob":20,"B_amount":60},
+  {"A_prob":60,"A_amount":50,"B_prob":20,"B_amount":70},
+  {"A_prob":80,"A_amount":50,"B_prob":30,"B_amount":60},
+  {"A_prob":70,"A_amount":30,"B_prob":20,"B_amount":40},
+  {"A_prob":80,"A_amount":60,"B_prob":30,"B_amount":70},
+  {"A_prob":80,"A_amount":50,"B_prob":20,"B_amount":80},
+  {"A_prob":70,"A_amount":50,"B_prob":20,"B_amount":80},
+  {"A_prob":60,"A_amount":30,"B_prob":20,"B_amount":40},
+  {"A_prob":60,"A_amount":60,"B_prob":20,"B_amount":70},
+  {"A_prob":80,"A_amount":40,"B_prob":20,"B_amount":60}
+]
+
+// for each trial, add the trial type 'experimental'
+for (var i = 0; i < exp_pairs.length; i++) {
+  exp_pairs[i].trial_type = "experimental";
+}
+
+// 10 catch trials
+var catch_pairs = [
+  {"A_prob":50,"A_amount":80,"B_prob":20,"B_amount":40},
+  {"A_prob":60,"A_amount":70,"B_prob":50,"B_amount":30},
+  {"A_prob":80,"A_amount":70,"B_prob":30,"B_amount":60},
+  {"A_prob":60,"A_amount":40,"B_prob":30,"B_amount":30},
+  {"A_prob":50,"A_amount":70,"B_prob":20,"B_amount":60},
+  {"A_prob":80,"A_amount":80,"B_prob":20,"B_amount":70},
+  {"A_prob":80,"A_amount":60,"B_prob":50,"B_amount":40},
+  {"A_prob":80,"A_amount":40,"B_prob":40,"B_amount":30},
+  {"A_prob":40,"A_amount":80,"B_prob":20,"B_amount":40},
+  {"A_prob":70,"A_amount":60,"B_prob":20,"B_amount":30}
+]
+
+// for each trial, add the trial type 'catch'
+for (var i = 0; i < catch_pairs.length; i++) {
+  catch_pairs[i].trial_type = "catch";
+}
+
+// combine the array of experimental and catch pairs
+var all_pairs = exp_pairs.concat(catch_pairs);
+
+/********************************************************
+Determine the locations of the circles
+
+We have four possibilities:
+(1) the two options are presented left-right, with amount on top and probability on bottom
+(2) the two options are presented left-right, with amount on bottom and probability on top
+(2) the two options are presented top-bottom, with amount on left and probability on right
+(2) the two options are presented top-bottom, with amount on right and probability on left.
+
+Essentially, we need to assign all trials into these four possibilities.
+Note that if we consider where the high probability option (i.e., A) is presented, it then becomes eight possibilities.
+********************************************************/
+
+// first, when the two options are presented left-right. Let's call this horizontal arrangement.
+var horizontal_locations_factors = {
+  arrangement: ["horizontal"],
+  prob_loc: ["top", "bottom"], // the probability info will be presented either on top or bottom
+  high_loc: ["left", "right"], // the option with a higher probability (i.e., A) will be presented either on left or right
+};
+
+// all possibilities when the two options are presented horizontally
+var horizontal_locations = jsPsych.randomization.factorial(horizontal_locations_factors, 10);
+
+// when the two options are presented top-bottom. Let's call this vertical arrangement.
+var vertical_locations_factors = {
+  arrangement: ["vertical"],
+  prob_loc: ["left", "right"], // the probability info will be presented either on left or right
+  high_loc: ["top", "bottom"], // the option with a higher probability (i.e., A) will be presented either on top or bottom
+};
+
+// all possibilities when the two options are presented vertically
+var vertical_locations = jsPsych.randomization.factorial(vertical_locations_factors, 10);
+
+// combine all the possible locations
+var locations = horizontal_locations.concat(vertical_locations);
+
+// repeat each location match the number of trials
+locations = jsPsych.randomization.repeat(locations, 10);
+
+/********************************************************
+Create trials.
+********************************************************/
+
+var trials = []; // an empty array to hold all trials
+
+all_pairs = jsPsych.randomization.shuffle(all_pairs);
+locations = jsPsych.randomization.shuffle(locations);
+
+// go through all choice pairs one by one
+for (var i = 0; i < all_pairs.length; i++) {
+
+  var current_trial = all_pairs[i];
+
+  // select a corresponding location from the locations array
+  var current_location = locations[i];
+
+  // now merge the two objects, see https://www.javascripttutorial.net/object/javascript-merge-objects/
+  var one_trial = {...current_trial, ...current_location};
+
+  // add the current trial to the trials array
+  trials.push(one_trial);
+}
+
+
+/********************************************************
+Add some more information to each trial.
+********************************************************/
+
+/* go through the generated trials one by one and add more information
+information that we will need to determine the layout of each trial
+(1) the location of four circles
+(2) the color of four circles
+*/
+for (var i = 0; i < trials.length; i++) {
+  var one_trial = trials[i];
+
+  one_trial.trial_number = i + 1;
+
+  // determine the position for each of the four circles
+  var high_location = one_trial.high_loc; // get where option A will be presented
+  var prob_location = one_trial.prob_loc; // get where the probability info will be presented
+
+  // consider the case when the two options are presented horizontally
+  if (one_trial.arrangement === "horizontal") {
+
+    // when A is presented on the left, B will be on the right; vice versa
+    if (high_location === "left") {
+      var A_loc = "left";
+      var B_loc = "right";
+    } else {
+      var A_loc = "right";
+      var B_loc = "left";
+    }
+
+    // when probability is presented on top, amount will be on bottom; vice versa
+    if (prob_location === "top") {
+      var amount_location = "bottom";
+    } else {
+      var amount_location = "top";
+    }
+
+    // determine the positions of all four circles
+    one_trial.A_amount_loc = A_loc + '-' + amount_location;
+    one_trial.A_prob_loc = A_loc + '-' + prob_location;
+    one_trial.B_amount_loc = B_loc + '-' + amount_location;
+    one_trial.B_prob_loc = B_loc + '-' + prob_location;
+
+    // determine the color of all four circles;
+    // to simplify things, we will always present the blue circles on the left
+    if (A_loc === "left") {
+      one_trial.A_color = "blue";
+      one_trial.B_color = "yellow";
+    } else {
+      one_trial.A_color = "yellow";
+      one_trial.B_color = "blue";
+    }
+
+  }
+
+  // consider the case when the two options are presented vertically
+  if (one_trial.arrangement === "vertical") {
+
+    // when A is presented on the top, B will be on the bottom; vice versa
+    if (high_location === "top") {
+      var A_loc = "top";
+      var B_loc = "bottom";
+    } else {
+      var A_loc = "bottom";
+      var B_loc = "top";
+    }
+
+    // when probability is presented on the left, amount will be on right; vice versa
+    if (prob_location === "left") {
+      var amount_location = "right";
+    } else {
+      var amount_location = "left";
+    }
+
+    // determine the positions of all four circles
+    one_trial.A_amount_loc = amount_location + '-' + A_loc;
+    one_trial.A_prob_loc = prob_location + '-' + A_loc;
+    one_trial.B_amount_loc = amount_location + '-' + B_loc;
+    one_trial.B_prob_loc = prob_location + '-' + B_loc;
+
+    // determine the color of all four circles;
+    // to simplify things, we will always present the blue circles on the top
+    if (A_loc === "top") {
+      one_trial.A_color = "blue";
+      one_trial.B_color = "yellow";
+    } else {
+      one_trial.A_color = "yellow";
+      one_trial.B_color = "blue";
+    }
+
+  }
+
+}
+
+// randomly select 6 trials to be used in practice
+var tmp_1 = jsPsych.randomization.shuffle(trials);
+
+// make a deep copy of the array
+var tmp = tmp_1.map(a => {return {...a}});
+
+practice_trials = [];
+
+for (var i = 0; i < 6; i++) {
+  var tmp_trial = tmp[i];
+  tmp_trial.trial_number = i + 1;
+  practice_trials.push(tmp_trial);
+}
+
+/***************************************************************/
+/*                      Preload files                          */
+/***************************************************************/
+/* all images and audios used in the experiment */
+
+// TODO:  ZC - will need to adjust the instructions. The file sizes look a bit strange.
+// in power point - file - export - save every slide as png
+var instruct_images = [ 'Instructions/Slide1.png', 'Instructions/Slide2.png',
+                        'Instructions/Slide3.png', 'Instructions/Slide4.png',
+                        'Instructions/Slide5.png', 'Instructions/Slide6.png',
+                        'Instructions/Slide7.png', 'Instructions/Slide8.png',
+                        'Instructions/Slide9.png','Instructions/Slide10.png',
+                        'Instructions/Slide11.png','Instructions/Slide12.png'];
+
+var all_audios = ['cash.wav', 'neutral_swoosh.wav'];
+
+var preload = {
+  type: jsPsychPreload,
+  images: instruct_images,
+  audio:all_audios
+}
+
+/***************************************************************/
+/*           Informed Consent & Task Instructions              */
+/***************************************************************/
+
+var consent = {
+  type: jsPsychInstructions,
+  pages: ['<img src="' + instruct_images[0] + '"></img>'],
+  show_clickable_nav: true,
+  button_label_next: "I agree",
+  allow_backward: false
+};
+
+var instruction_practice = {
+  type: jsPsychInstructions,
+  pages: ['<img src="' + instruct_images[1] + '"></img>',
+          '<img src="' + instruct_images[2] + '"></img>',
+          '<img src="' + instruct_images[3] + '"></img>',
+          '<img src="' + instruct_images[4] + '"></img>',
+          '<img src="' + instruct_images[5] + '"></img>',
+          '<img src="' + instruct_images[6] + '"></img>',
+          '<img src="' + instruct_images[7] + '"></img>',
+          '<img src="' + instruct_images[8] + '"></img>',
+          '<img src="' + instruct_images[9] + '"></img>',
+          '<img src="' + instruct_images[10]+ '"></img>'],
+  show_clickable_nav: true,
+  allow_backward: true,
+  on_start: function(){
+    block_type = "practice";
+    Ntrial = practice_trials.length;
+  }
+};
+
+var instruction_exp = {
+  type: jsPsychInstructions,
+  pages: ['<img src="' + instruct_images[11] + '"></img>'],
+  show_clickable_nav: true,
+  on_start: function(){
+    block_type = "exp";
+    Ntrial = trials.length;
+  }
+};
+
+/***************************************************************/
+/*                        Browser Check                        */
+/***************************************************************/
+
+var browser_size = {
+  type: jsPsychBrowserCheck,
+  minimum_width: 1000,
+  minimum_height: 600
+};
+
+var browser_check = {
+  type: jsPsychBrowserCheck,
+  inclusion_function: (data) => {
+    return (data.browser == 'chrome' || data.browser == 'firefox') && data.mobile === false
+  },
+  exclusion_message: (data) => {
+    if(data.mobile){
+      return '<p>You must use a desktop/laptop computer to participate in this experiment.</p>';
+    } else if((data.browser == 'chrome' || data.browser == 'firefox') === false){
+      return '<p>You must use Chrome or Firefox as your browser to complete this experiment.</p>';
+    }
+  },
+  on_finish: function(data){
+
+    // get the start time
+    var today = new Date();
+    var date = today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+    var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+    var dateTime = date + ' ' + time;
+
+    // add the start time and some browser properties to the data
+    jsPsych.data.addProperties({exp_start_time: dateTime,
+                                browser: data.browser,
+                                browser_version: data.browser_version,
+                                width: data.width,
+                                height: data.height,
+                                vsync_rate: data.vsync_rate,
+                                os: data.os});
+  }
+};
+
+/***************************************************************/
+/*                         Adjust volume                       */
+/***************************************************************/
+var adjust_volume = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: '<p>This experiment contains some sound effects. Turn on your speaker and adjust the volume of your speaker to a comfortable level. <br><br>You can test the sound below. Press J to continue once you are ready.</p><audio controls src="cash.wav"></audio>',
+  choices: ['j']
+}
+
+/***************************************************************/
+/*                    Demographic Information                  */
+/***************************************************************/
+
+// subject ID
+var enter_subjectID = {
+  type: jsPsychSurveyText,
+  questions: [
+    {prompt: "Enter your prolific ID:", required: true}],
+  on_finish: function(data) {
+    // get subject ID and add it to the data object
+    subjID = data.response.Q0;
+    jsPsych.data.addProperties({subjID:subjID,});
+
+    // write headers
+    var data_row = "subjectID, age, gender, nationality, exp_start_time, browser, browser_version, width, height, vsync_rate, os\n";
+    appendData('Gain-only-demo-subject-' + subjID +'.csv', data_row);
+
+    var data_row = "subjectID, block_type, block_number, trial_number, " +
+                   "trial_type, arrangement, prob_loc, high_loc, " +
+                   "A_amount_loc, A_prob_loc, B_amount_loc, B_prob_loc, " +
+                   "A_amount, A_prob, B_amount, B_prob, A_color, B_color," +
+                   "chosen_color, chosen_amount, chosen_prob, choice," +
+                   "startRT, choiceRT, spin_degrees, outcome, outcome_amount\n";
+
+    appendData('Gain-only-main-subject-'+ subjID +'.csv', data_row);
+
+    var data_row = "subjectID, block_type, block_number, trial_number, mouse_rt, x, y, element, info_type\n";
+    appendData('Gain-only-tracking-subject-'+ subjID +'.csv', data_row);
+
+    var data_row = 'subjectID, total, bonus\n';
+    appendData('Gain-only-pay-subject-' + subjID +'.csv', data_row);
+
+  }
+};
+
+// get age and nationality
+var enter_age_nationality = {
+  type: jsPsychSurveyText,
+  questions: [
+    {prompt: "Enter your age", required: true},
+    {prompt: "Enter your nationality", required: true}],
+  on_finish: function(data) {
+    // get age and nationality and add it to the data object
+    age = data.response.Q0;
+    nationality = data.response.Q1;
+    jsPsych.data.addProperties({age:age, nationality:nationality});
+  }
+};
+
+// get participant's gender
+var enter_gender = {
+  type: jsPsychSurveyMultiChoice,
+  questions: [{
+    prompt: "Enter your gender",
+    options: ["male", "female", "non-binary", "I don't want to say"],
+    required: true
+  }],
+  on_finish: function(data) {
+    // get gender and add it to the data object
+    gender = data.response.Q0;
+    jsPsych.data.addProperties({gender:gender});
+
+    // register data
+    var data_row =
+        data.subjID + ',' + data.age + ',' +  data.gender + ',' +
+        data.nationality + ',' +  data.exp_start_time + ',' +
+        data.browser + ',' +  data.browser_version + ',' +  data.width + ',' +  data.height + ',' +
+        data.vsync_rate + ',' +  data.os + '\n';
+
+    appendData('Gain-only-demo-subject-' + subjID +'.csv', data_row);
+
+  }
+};
+
+// full screen mode
+var enter_fullscreen = {
+  type: jsPsychFullscreen,
+  fullscreen_mode: true
+};
+
+
+/********************************************************
+  Start a trial
+********************************************************/
+
+// function to generate the html string during the start phase
+var create_html_start = function(){
+
+  var html_string = '<div class = "game-interface">';
+
+  // add a small circular start button
+  html_string = html_string + '<div id = "start-button"></div>';
+
+  // add the start message to show the number of trials left
+  html_string = html_string +
+    '<div id = "start-message">Click on the button to start trial ' + trial_number + '/'+ Ntrial + '</div>';
+
+  // add the closing div tag
+  html_string = html_string +
+    '</div>';
+
+  return html_string;
+
+}
+
+var risk_start = {
+  type: jsPsychHtmlMouseResponse,
+  stimulus: 'placeholder',
+  choices: ['start-button'],
+  tracking_elements: [],
+  on_start: function(risk_start){
+
+    // get the parameters of the current trial
+    trial_number = jsPsych.timelineVariable('trial_number');
+    trial_type = jsPsych.timelineVariable('trial_type');
+
+    arrangement = jsPsych.timelineVariable('arrangement');
+    high_loc = jsPsych.timelineVariable('high_loc');
+    prob_loc = jsPsych.timelineVariable('prob_loc');
+
+    A_amount = jsPsych.timelineVariable('A_amount');
+    A_prob = jsPsych.timelineVariable('A_prob');
+    B_amount = jsPsych.timelineVariable('B_amount');
+    B_prob = jsPsych.timelineVariable('B_prob');
+
+    A_amount_loc = jsPsych.timelineVariable('A_amount_loc');
+    A_prob_loc = jsPsych.timelineVariable('A_prob_loc');
+    B_amount_loc = jsPsych.timelineVariable('B_amount_loc');
+    B_prob_loc = jsPsych.timelineVariable('B_prob_loc');
+
+    A_color = jsPsych.timelineVariable('A_color');
+    B_color = jsPsych.timelineVariable('B_color');
+
+    // create the html string to be presented
+    risk_start.stimulus = create_html_start();
+
+  },
+  on_finish: function(data){
+    startRT = data.rt;
+  }
+}
+
+/********************************************************
+  Function to register the mouse tracking data
+********************************************************/
+// function to save the mouse tracking data to a csv file
+// the input variable mouse_data is an array that contains tracking data
+var save_mouse_data = function(mouse_data){
+  // create a dictionary to show the information type shown in each location
+  var loc_info_dict = {};
+
+  loc_info_dict[A_amount_loc] = 'A_amount';
+  loc_info_dict[A_prob_loc] = 'A_prob';
+  loc_info_dict[B_amount_loc] = 'B_amount';
+  loc_info_dict[B_prob_loc] = 'B_prob';
+
+  if (A_color === "blue") {
+    loc_info_dict['choice-button-left'] = 'A_choice_button';
+    loc_info_dict['choice-button-right'] = 'B_choice_button';
+  } else {
+    loc_info_dict['choice-button-left'] = 'B_choice_button';
+    loc_info_dict['choice-button-right'] = 'A_choice_button';
+  }
+
+  loc_info_dict["none"] = "none";
+
+  // create an empty string to hold all tracking data later on
+  var mouse_data_string = "";
+
+  // go through the elments in the array one by one,
+  // and add the information to the string created above
+  for (var i = 0; i < mouse_data.length; i++) {
+    var one_data_row = mouse_data[i];
+
+    mouse_rt = one_data_row[0];
+    x = one_data_row[1];
+    y = one_data_row[2];
+    element = one_data_row[3];
+    info_type = loc_info_dict[element];
+
+    var one_row_string =
+      subjID + ',' + block_type + ',' + block_number + ',' +
+      trial_number + ',' + mouse_rt + ',' + x + ',' + y + ',' +
+      element + ',' + info_type + '\n';
+
+    mouse_data_string = mouse_data_string +  one_row_string;
+
+  }
+
+  // save the data to a csv file
+  appendData('Gain-only-tracking-subject-'+ subjID +'.csv', mouse_data_string);
+
+}
+
+/********************************************************
+  Function to register the main data
+********************************************************/
+// function to save the main data to a csv file
+var save_main_data = function(){
+  // create a string to hold all main data
+  var main_data_string =
+    subjID + ',' + block_type + ',' + block_number + ',' + trial_number + ',' + trial_type + ',' +
+    arrangement + ',' + prob_loc + ',' + high_loc + ',' +
+    A_amount_loc + ',' + A_prob_loc + ',' + B_amount_loc + ',' + B_prob_loc + ',' +
+    A_amount + ',' + A_prob + ',' + B_amount + ',' + B_prob + ',' +
+    A_color + ',' + B_color + ',' + chosen_color + ',' + chosen_amount + ',' + chosen_prob + ',' +
+    choice + ',' + startRT + ',' + choiceRT + ',' + spin_degrees + ',' +
+    outcome + ',' + outcome_amount + '\n';
+
+  // save the data to a csv file
+  appendData('Gain-only-main-subject-'+ subjID +'.csv', main_data_string);
+
+}
+
+/********************************************************
+  Sample information
+********************************************************/
+
+// function to generate the html string during the sampling phase
+var create_html_sampling = function(){
+
+  var html_string = '<div class = "game-interface">';
+
+  // add the circle containing the probability info of option A
+  html_string = html_string +
+    '<div id = "' + A_prob_loc+ '" class = "info-box ' + A_color + '">' +
+    '<p id = "' + A_prob_loc + '-front">%</p>' +
+    '<div id = "' + A_prob_loc + '-back" class = "pie-chart" style= "background: conic-gradient(#008450 0% ' + A_prob + '%, #BFC9CA ' + A_prob + '% 100%);"></div>' +
+    '</div>';
+
+  // add the circle containing the amount info of option A
+  html_string = html_string +
+    '<div id = "' + A_amount_loc + '" class = "info-box ' + A_color + '">' +
+    '<p id = "' + A_amount_loc + '-front">£</p>' +
+    '<div id = "' + A_amount_loc + '-back" class = "amount_bar" style="background: linear-gradient(to top, #008450, #008450 ' + A_amount + '%, #BFC9CA '+ A_amount + '%)"></div>' +
+    '</div>';
+    // TODO: ZC: this assumes that a completely filled bar stands for 100 points
+
+  // add the circle containing the probability info of option B
+  html_string = html_string +
+    '<div id = "' + B_prob_loc+ '" class = "info-box ' + B_color + '">' +
+    '<p id = "' + B_prob_loc + '-front">%</p>' +
+    '<div id = "' + B_prob_loc + '-back" class = "pie-chart" style= "background: conic-gradient(#008450 0% ' + B_prob + '%, #BFC9CA ' + B_prob + '% 100%);"></div>' +
+    '</div>';
+
+  // add the circle containing the amount info of option B
+  html_string = html_string +
+    '<div id = "' + B_amount_loc + '" class = "info-box ' + B_color + '">' +
+    '<p id = "' + B_amount_loc + '-front">£</p>' +
+    '<div id = "' + B_amount_loc + '-back" class = "amount_bar" style="background: linear-gradient(to top, #008450, #008450 ' + B_amount + '%, #BFC9CA '+ B_amount + '%)"></div>' +
+    '</div>';
+
+  // add the two choice buttons
+  html_string = html_string +
+    '<div id = "choice-button-left"></div>' +
+    '<div id = "choice-button-right"></div>';
+
+  // add the closing div tag
+  html_string = html_string + '</div>';
+
+  return html_string;
+
+}
+
+var risk_sampling_decide = {
+  type: jsPsychHtmlMouseResponse,
+  stimulus: 'placeholder',
+  tracking_elements: ['left-top', 'left-bottom', 'right-top', 'right-bottom', 'choice-button-left','choice-button-right'],
+  choices:['choice-button-left','choice-button-right'],
+  on_start: function(risk_sampling_decide){
+    risk_sampling_decide.stimulus = create_html_sampling();
+  },
+  on_finish: function(data){
+
+    choiceRT = data.rt;
+
+    // determine which option is selected
+    if (data.selected_choice === "choice-button-left") {
+      chosen_color = "blue";
+    } else {
+      chosen_color = "yellow";
+    }
+
+    if (chosen_color === A_color) {
+      choice = "A";
+      chosen_amount = A_amount;
+      chosen_prob = A_prob;
+    } else {
+      choice = "B";
+      chosen_amount = B_amount;
+      chosen_prob = B_prob;
+    }
+
+    // save the mouse tracking data
+     save_mouse_data(data.mouse_tracking);
+    }
+  }
+
+/********************************************************
+            Decision Outcome
+********************************************************/
+// function to generate the html string for showing the outcome
+var create_html_outcome = function(){
+
+  var html_string = '<div class = "game-interface">';
+
+  // add the circle showing the probability info
+  html_string = html_string +
+    '<div id = "arrow"><p>&#x2193</p></div>' +
+    '<div id = "outcome-info-prob">' +
+    '<div class = "pie-chart" style="background: conic-gradient(#008450 0% ' + chosen_prob + '%, #BFC9CA ' + chosen_prob + '% 100%);"></div>' +
+    '</div>';
+
+  // add the circle showing the amount info
+  html_string = html_string +
+    '<div id = "outcome-message"></div>' + // do not show the outcome in text yet
+    '<div id = "outcome-info-amount">' +
+    '<div class = "amount_bar" style="background: linear-gradient(to top, #008450, #008450 ' + chosen_amount + '%, #BFC9CA '+ chosen_amount + '%)"></div>' +
+    '</div>';
+
+  // add win and loss sound
+  html_string = html_string +
+      '<img src onerror= "show_gamble_outcome();">' +
+      '<audio id="loss_sound" src="neutral_swoosh.wav"></audio>' +
+      '<audio id="win_sound" src="cash.wav"></audio>';
+
+  // add the closing div tag
+  html_string = html_string + '</div>';
+
+  return html_string;
+
+}
+
+// functions to show outcomes
+function show_gamble_outcome() {
+
+  // spin the wheel
+  var wheel = document.getElementById("outcome-info-prob");
+
+  // randomly select a number between 1 and 360; this will be how many degrees the wheel will spin
+  spin_degrees = randomIntFromInterval(1, 360);
+
+  // suppose the chosen option has 10% of the area colored green (10% * 360 = 36 degrees).
+  // it means the wheel will need to spin between 90% * 360 and 360 degress in order to land on green.
+  // so, for an option that has x% of winning, the wheel will need to spin between 360 * (100 - x%) and 359 degrees in order to land on green.
+  if (spin_degrees <= 360 * (100 - chosen_prob) / 100) {
+    outcome = 'no_win';
+  } else {
+    outcome = 'win';
+  }
+
+  // to create the impression that the wheel is spinning quickly
+  // we will spin the wheel for another 3 or 4 full circles
+  // since one full circle is 360 degress, it does not change the outcome
+  var spin_degrees_total = spin_degrees + 360 * randomIntFromInterval(3, 4);
+
+  wheel.style.transform = "rotate(" + spin_degrees_total + "deg)";
+
+  // show outcome text and play audio after 2000 milliseconds
+  var myVar = setTimeout(show_outcome, 2000);
+
+  function show_outcome() {
+    if (outcome === 'win') {
+      outcome_amount = chosen_amount;
+      document.getElementById("outcome-message").innerHTML = '<p>+'+ chosen_amount + '</p>';
+      document.getElementById("win_sound").play();
+     } else if (outcome === 'no_win') {
+       outcome_amount = 0;
+       document.getElementById("outcome-message").innerHTML = '<p>0</p>';
+       document.getElementById("loss_sound").play();
+    }
+  }
+}
+
+var risk_outcome = {
+  type: jsPsychHtmlMouseResponse,
+  stimulus: 'placeholder',
+  choices: [],
+  tracking_elements: [],
+  trial_duration: 3000,
+  on_start: function(risk_outcome){
+    risk_outcome.stimulus = create_html_outcome();
+  }
+}
+
+/********************************************************
+  Register the data from one trial
+********************************************************/
+
+// show a blank screen for 500 milliseconds,
+// and register the data from the current trial.
+var risk_data = {
+  type: jsPsychHtmlMouseResponse,
+  stimulus: '<p></p>',
+  choices: [],
+  tracking_elements: [],
+  trial_duration: 500,
+  on_finish: function(data){
+
+    // register the data from one trial
+    save_main_data();
+
+    // save the outcomes from the experimental block
+    if (block_type === "exp") {
+      all_outcomes.push({trial_number:trial_number, outcome_amount:outcome_amount});
+    }
+  }
+}
+
+/********************************************************
+  Debriefing
+********************************************************/
+
+var debrief = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: 'none',
+  choices: 'No_KEYS',
+  on_start: function(debrief){
+
+    var message =
+    "<p>This is the end of this experiment. Thank you for your participation!</p>" +
+    "<p>In this experiment, we are interested in how wins and losses may influence how people make choices afterwards.</p>" +
+    "<p>The program has randomly picked 5 trials:</p><br>";
+
+    // randomly pick 5 trials
+    all_outcomes = jsPsych.randomization.shuffle(all_outcomes);
+
+    var amount_sum = 0;
+
+    for (var i = 0; i < 5; i++) {
+      var tmp_trial = all_outcomes[i].trial_number;
+      var tmp_amount = all_outcomes[i].outcome_amount;
+
+      message = message +
+      '<p>In Trial ' + tmp_trial +', you got ' + tmp_amount + ' cents.</p>';
+
+      amount_sum = amount_sum + tmp_amount;
+    }
+
+    // show the total amount
+    message = message +
+    '<p>In total, you got ' + amount_sum + ' cents.</p>';
+
+    // determine how much bonus participants will get
+    if (amount_sum <= 0) {
+      var bonus = 0;
+      message = message +
+        '<p> You will therefore not receive any extra bonus.</p>';
+
+    } else if (amount_sum < 100) {
+      var bonus = amount_sum / 100;
+      message = message +
+        '<p> You will therefore receive a bonus of ' + bonus + ' pound.</p>';
+
+    } else {
+      var bonus = 1;
+      message = message +
+        '<p> You will therefore receive the maximum bonus of 1 Euro.</p>';
+    }
+
+    // save the data as csv file
+    var data_row = subjID + ',' + amount_sum + ',' + bonus + '\n';
+    appendData('Gain-only-pay-subject-' + subjID +'.csv', data_row);
+
+    message = message +
+    "<p>We really appreciate your participation and contribution to this research. If you have any questions, you can contact the researcher at nilosmita.banerjee@ulb.be .</p><br><br>"+
+    "<p><a href='https://app.prolific.co/submissions/complete?cc=CSS04LEE'>Click here to complete the experiment and return to Prolific.</a></p>";
+
+    debrief.stimulus = message;
+
+  }
+};
+
+/********************************************************
+  Put all elements together
+********************************************************/
+
+// browser check and preload images
+timeline.push(browser_size);
+timeline.push(browser_check);
+timeline.push(preload);
+
+timeline.push(consent);
+
+timeline.push(adjust_volume);
+
+// demographic information
+timeline.push(enter_subjectID);
+timeline.push(enter_age_nationality);
+timeline.push(enter_gender);
+
+// fullscreen mode
+timeline.push(enter_fullscreen);
+
+var practice = {
+  timeline: [risk_start, risk_sampling_decide, risk_outcome, risk_data],
+  timeline_variables: practice_trials,
+  randomize_order: false
+};
+
+timeline.push(instruction_practice);
+timeline.push(practice);
+
+var exp = {
+  timeline: [risk_start, risk_sampling_decide, risk_outcome, risk_data],
+  timeline_variables: trials,
+  randomize_order: false
+};
+
+timeline.push(instruction_exp);
+timeline.push(exp);
+
+timeline.push(debrief);
+
+/********************************************************
+Run the experiment
+********************************************************/
+
+jsPsych.run(timeline);
+
+</script>
+</html>
